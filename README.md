@@ -2,9 +2,9 @@
 
 # Cloud-Native Infrastructures
 
-Hands-on labs for the **Cloud-Native Infrastructures** module.
+Hands-on labs for the **Cloud-Native Infrastructures** module — Tek-Up University.
 
-
+This repository contains the lab instructions and their companion scripts. The labs are built on **OpenStack**, an open-source IaaS cloud platform, deployed with DevStack on an AWS EC2 instance. They cover OpenStack's core services (identity, compute, images, networking, storage), then automated infrastructure provisioning (Infrastructure as Code).
 
 ---
 
@@ -19,6 +19,7 @@ Hands-on labs for the **Cloud-Native Infrastructures** module.
 | Lab 05 | Advanced networking | Neutron | *coming soon* |
 | Lab 06 | Infrastructure as Code | OpenTofu | *coming soon* |
 
+Labs are published as the sessions progress.
 
 ---
 
@@ -39,14 +40,16 @@ All labs use **the same EC2 instance**, prepared in Lab 01:
 
 ```
 Cloud-Native/
-├── README.md          
+├── README.md               
 ├── lab01/
-│   ├── README.md      
-│   └── README.fr.md   
+│   ├── README.md            
+│   ├── README.fr.md          
+│   ├── install-guide.md      
+│   ├── install-guide.fr.md  
+│   └── img/                 
 └── lab02/
     ├── README.md      
     ├── README.fr.md   
     └── clean_lab02.sh 
 ```
 
-Each `labXX/` folder contains the lab instructions along with any scripts used during the lab. 
