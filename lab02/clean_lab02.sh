@@ -1,74 +1,74 @@
 #!/bin/bash
 # =============================================================
-# clean_lab02.sh — Nettoyage des ressources de la partie 3 (TP2)
-# Ordre : VM -> routeur -> sous-réseau -> réseau
-# Le script continue même si une ressource est déjà supprimée.
+# clean_lab02.sh — Cleanup of the Part 3 resources (Lab 02)
+# Order: VM -> router -> subnet -> network
+# The script keeps going even if a resource is already deleted.
 # =============================================================
 
-# Exécute une commande et affiche un message si elle échoue
+# Run a command and print a message if it fails
 run() {
     echo "-> $*"
-    "$@" || echo "   (ignoré : ressource absente ou déjà supprimée)"
+    "$@" || echo "   (skipped: resource missing or already deleted)"
 }
 
 # -------------------------------------------------------------
-echo "=== Nettoyage des ressources de Candace ==="
-# Utiliser l'identité de Candace (membre du projet de l'équipe A)
+echo "=== Cleaning up Candace's resources ==="
+# Use Candace's identity (member of team A's project)
 export OS_CLOUD=candace
 
-# Supprimer la VM de Candace et attendre la fin de la suppression, pour libérer son port sur net-candace
+# Delete Candace's VM and wait for the deletion to finish, to free its port on net-candace
 run openstack server delete --wait vm-candace
 
-# Détacher le sous-réseau du routeur, ce qui supprime l'interface du routeur (port 10.10.1.1)
+# Detach the subnet from the router, which deletes the router's interface (port 10.10.1.1)
 run openstack router remove subnet router-candace subnet-candace
 
-# Retirer la passerelle externe du routeur, ce qui supprime son port sur le réseau public
+# Remove the router's external gateway, which deletes its port on the public network
 run openstack router unset --external-gateway router-candace
 
-# Supprimer le routeur, désormais sans interface ni passerelle
+# Delete the router, now without any interface or gateway
 run openstack router delete router-candace
 
-# Supprimer le sous-réseau 10.10.1.0/24
+# Delete the 10.10.1.0/24 subnet
 run openstack subnet delete subnet-candace
 
-# Supprimer le réseau de Candace (son port DHCP est supprimé automatiquement)
+# Delete Candace's network (its DHCP port is deleted automatically)
 run openstack network delete net-candace
 
-# Supprimer la VM de test créée par Candace sur le réseau shared (ligne 2 du tableau Q11)
+# Delete the test VM created by Candace on the shared network (row 2 of the Q11 table)
 run openstack server delete --wait vm-test-candace
 
-# Supprimer le réseau de test créé par Candace (ligne 4 du tableau Q11)
+# Delete the test network created by Candace (row 4 of the Q11 table)
 run openstack network delete net-test-candace
 
 # -------------------------------------------------------------
-echo "=== Nettoyage des ressources de Baron ==="
-# Utiliser l'identité de Baron (membre d'un autre projet)
+echo "=== Cleaning up Baron's resources ==="
+# Use Baron's identity (member of another project)
 export OS_CLOUD=baron
 
-# Supprimer la VM de test créée par Baron dans son propre projet
+# Delete the test VM created by Baron in his own project
 run openstack server delete --wait vm-test-baron
 
-# Supprimer le réseau de test créé par Baron dans son propre projet
+# Delete the test network created by Baron in his own project
 run openstack network delete net-test-baron
 
 # -------------------------------------------------------------
-echo "=== Nettoyage des ressources d'admin ==="
-# Utiliser l'identité admin
+echo "=== Cleaning up admin's resources ==="
+# Use the admin identity
 export OS_CLOUD=admin
 
-# Supprimer la VM de test créée par admin dans son propre projet
+# Delete the test VM created by admin in its own project
 run openstack server delete --wait vm-test-admin
 
-# Supprimer le réseau de test créé par admin dans son propre projet
+# Delete the test network created by admin in its own project
 run openstack network delete net-test-admin
 
-# Supprimer le flavor de test créé par admin (ligne 7 du tableau Q11)
+# Delete the test flavor created by admin (row 7 of the Q11 table)
 run openstack flavor delete test-flavor
 
 # -------------------------------------------------------------
-echo "=== Vérification finale (admin) ==="
+echo "=== Final check (admin) ==="
 openstack server list --all-projects
 openstack network list
 openstack router list
 
-echo "Nettoyage terminé."
+echo "Cleanup complete."
