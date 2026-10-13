@@ -1,4 +1,4 @@
-EN English | [🇫🇷 Français](README.fr.md)
+
 # Lab 02 — Keystone: identity, projects and access control
 
 ## Lab objectives

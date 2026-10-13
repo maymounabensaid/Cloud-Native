@@ -10,14 +10,14 @@ This repository contains the lab instructions and their companion scripts. The l
 
 ## Labs
 
-| Lab | Topic | Services | Instructions |
-| --- | --- | --- | --- |
+| Lab    | Topic                                               | Services               | Instructions    |
+| ------ | --------------------------------------------------- | ---------------------- | --------------- |
 | Lab 01 | Deploying and exploring an OpenStack infrastructure | DevStack, Horizon, CLI | [lab01](lab01/) |
-| Lab 02 | Identity, projects and access control | Keystone | [lab02](lab02/) |
-| Lab 03 | Compute and images | Nova, Glance | *coming soon* |
-| Lab 04 | Storage | Cinder, Swift | *coming soon* |
-| Lab 05 | Advanced networking | Neutron | *coming soon* |
-| Lab 06 | Infrastructure as Code | OpenTofu | *coming soon* |
+| Lab 02 | Identity, projects and access control               | Keystone               | [lab02](lab02/) |
+| Lab 03 | Compute and images                                  | Nova, Glance           | [lab03](lab03/) |
+| Lab 04 | Storage                                             | Cinder, Swift          | *coming soon*   |
+| Lab 05 | Advanced networking                                 | Neutron                | *coming soon*   |
+| Lab 06 | Infrastructure as Code                              | OpenTofu               | *coming soon*   |
 
 Labs are published as the sessions progress.
 
@@ -48,8 +48,11 @@ Cloud-Native/
 │   ├── install-guide.fr.md  
 │   └── img/                 
 └── lab02/
+|    ├── README.md      
+|    ├── README.fr.md   
+|    └── clean_lab02.sh
+└── lab03/
     ├── README.md      
-    ├── README.fr.md   
-    └── clean_lab02.sh 
+    └──README.fr.md     
 ```
 

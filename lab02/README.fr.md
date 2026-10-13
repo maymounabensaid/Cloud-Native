@@ -1,4 +1,4 @@
-[EN English](README.md) | 🇫🇷 Français
+
 
 # TP02 — Keystone : identité, projets et contrôle d'accès
 
