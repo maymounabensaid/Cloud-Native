@@ -1,7 +1,5 @@
 # Lab 03 — Compute & Images : Nova et Glance
 
-**Module : Infrastructures Cloud Natives**
-**Environnement :** instance EC2 r8i.large avec DevStack 
 
 
 ---
