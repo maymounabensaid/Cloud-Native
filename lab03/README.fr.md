@@ -27,13 +27,26 @@ openstack hypervisor list
 openstack network agent list
 ```
 
-Tous les services doivent être `up` / `enabled`. Si un service est arrêté :
+Tous les services doivent être `up` / `enabled`. Si l'un d'eux est `down`, repérez l'unité correspondante dans la sortie de `systemctl list-units` (colonne **UNIT**), puis redémarrez-la :
 
 ```bash
-sudo systemctl restart devstack@<service>
+sudo systemctl restart <unit>        # ex. : sudo systemctl restart devstack@n-cpu.service
 ```
+> **Attention :** le nom affiché par `openstack compute service list` (`nova-compute`) n'est pas le nom de l'unité systemd (`devstack@n-cpu.service`). Le tableau ci-dessous donne les correspondances utiles.
 
-Vérifiez ensuite le bridge externe `br-ex`, qui relie l'hôte au réseau `public` (172.24.4.0/24) des IP flottantes :
+| Service OpenStack | Unité systemd |
+|---|---|
+| nova-compute | `devstack@n-cpu.service` |
+| nova-scheduler | `devstack@n-sch.service` |
+| nova-conductor | `devstack@n-cond-cell1.service`, `devstack@n-super-cond.service` |
+| nova-api | `devstack@n-api.service` |
+| neutron-server | `devstack@q-svc.service` ou `devstack@neutron-api.service` (selon la version) |
+| Keystone | `devstack@keystone.service` |
+| Glance | `devstack@g-api.service` |
+
+En cas d'échec, consultez les logs : `sudo journalctl -u <unit> -n 50 --no-pager`
+
+- Vérifiez ensuite le bridge externe `br-ex`, qui relie l'hôte au réseau `public` (172.24.4.0/24) des IP flottantes :
 
 ```bash
 ip addr show br-ex
@@ -67,6 +80,9 @@ openstack image show <id-image-cirros>
 
 ```bash
 wget https://cloud-images.ubuntu.com/minimal/releases/noble/release/ubuntu-24.04-minimal-cloudimg-amd64.img
+```
+- Affichez les caractéristiques de l'image :
+```bash
 qemu-img info ubuntu-24.04-minimal-cloudimg-amd64.img
 ```
 
@@ -86,14 +102,7 @@ openstack image create ubuntu-24.04-minimal \
     --private
 ```
 
-Vérifiez où Glance a stocké l'image (backend `file` par défaut dans DevStack) :
-
-```bash
-openstack image show ubuntu-24.04-minimal -c id -c status -c checksum
-sudo ls -lh /opt/stack/data/glance/images/
-```
-
-> **Q4.** Quel est le nom du fichier stocké par Glance ? Quel lien a-t-il avec l'image ? À quoi servent `--min-disk` et `--min-ram` ?
+> **Q4.** À quoi servent `--min-disk` et `--min-ram` ?
 
 ### 1.3 Visibilité et partage entre projets
 
@@ -104,7 +113,6 @@ Glance propose quatre niveaux de visibilité : `private`, `shared`, `community`,
 Avec les identifiants `admin` :
 
 ```bash
-source ~/devstack/openrc admin admin
 openstack project create project-lab03
 openstack user create student-lab03 --project project-lab03 --password Lab03Pass
 openstack role add --project project-lab03 --user student-lab03 member
@@ -117,14 +125,14 @@ openstack role add --project project-lab03 --user student-lab03 member
 Ouvrez un **second terminal** sur l'instance EC2 et connectez-vous en tant que `student-lab03` :
 
 ```bash
-source ~/devstack/openrc admin admin
-export OS_USERNAME=student-lab03
+source ~/devstack/openrc student-lab03 project-lab03
 export OS_PASSWORD=Lab03Pass
-export OS_PROJECT_NAME=project-lab03
-openstack token issue -c project_id -c user_id
 openstack image list
 ```
 
+> **Note :** `openrc` charge les paramètres communs à tout le cloud (adresse de Keystone, région, domaine) ; ses deux arguments fixent l'utilisateur et le projet. Le mot de passe doit être redéfini, car `openrc` utilise par défaut celui de l'administrateur. Vérifiez votre identité avec `env | grep OS_ | grep -v PASSWORD`.
+>
+> Chaque terminal conserve ses propres variables d'environnement : le premier reste connecté en `admin`, le second en `student-lab03`. Comparez la sortie de `openstack image list` dans les deux terminaux.
 #### c) Partager l'image avec le projet
 
 Dans le **premier terminal** (admin) :
@@ -173,7 +181,7 @@ Créez un gabarit privé, réservé au projet du Lab 03 (`project-lab03`) :
 
 ```bash
 openstack flavor create lab03.private --vcpus 1 --ram 512 --disk 4 --private
-openstack flavor set lab03.private --project <project-lab03>
+openstack flavor set lab03.private --project project-lab03
 ```
 
 > **Q7.** Peut-on lancer l'image Ubuntu avec le gabarit `m1.tiny` ? Testez puis expliquez le message obtenu en lien avec `--min-disk` et `--min-ram`.
@@ -221,8 +229,8 @@ openstack security group rule list sg-lab03
 #### c) Paire de clés
 
 ```bash
-openstack keypair create cle-lab03 > cle-lab03.pem
-chmod 600 cle-lab03.pem
+openstack keypair create key-lab03 > key-lab03.pem
+chmod 600 key-lab03.pem
 ```
 
 ### 3.2 Écrire le fichier user-data
@@ -242,7 +250,7 @@ hostname: vm-web
 write_files:
   - path: /var/www/index.html
     content: |
-      <h1>Lab 03 - Instance configuree par cloud-init</h1>
+      <h1> Lab 03 - Instance configured with cloud-init </h1>
 runcmd:
   - cd /var/www && nohup python3 -m http.server 80 > /var/log/web.log 2>&1 &
 ```
@@ -280,7 +288,7 @@ openstack server create vm-web \
     --flavor lab03.small \
     --network net-lab03 \
     --security-group sg-lab03 \
-    --key-name cle-lab03 \
+    --key-name key-lab03 \
     --user-data web-init.yaml \
     --wait
 ```
@@ -314,19 +322,19 @@ sudo ip addr add 172.24.4.1/24 dev br-ex
 sudo ip link set br-ex up
 ```
 
-Définissez les fonctions `web` et `relance_web`, qui testent et relancent le serveur web :
+Définissez les fonctions `web` et `relaunch_web`, qui testent et relancent le serveur web :
 
 ```bash
 web() {
-  curl -sS -m 5 http://$FIP || echo "=> pas de réponse du serveur web"
+  curl -sS -m 5 http://$FIP || echo "=> no response from the web server"
 }
 
-relance_web() {
-  ssh -n -i ~/cle-lab03.pem \
+relaunch_web() {
+  ssh -n -i ~/key-lab03.pem \
       -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
       ubuntu@$FIP \
       "cd /var/www && sudo nohup python3 -m http.server 80 > /tmp/web.log 2>&1 < /dev/null &" \
-    && echo "=> serveur web relancé"
+    && echo "=> web server restarted"
 }
 ```
 
@@ -337,49 +345,45 @@ ping -c 3 $FIP
 web
 ```
 
-Le résultat attendu est la page `<h1>Lab 03 - Instance configuree par cloud-init</h1>`.
+Le résultat attendu est la page `<h1> Lab 03 - Instance configured with cloud-init </h1>`.
 
 **Diagnostic :** si `web` ne répond pas, le message d'erreur de `curl` indique où chercher :
 
-| Erreur                                            | Signification                                            | Action                                                                              |
-| ------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Refus immédiat (*Failed to connect … after 0 ms*) | La VM répond, mais aucun service n'écoute sur le port 80 | Relancer le serveur : `relance_web` puis `web`                                      |
-| Délai dépassé (*timed out*) ou ping sans réponse  | Problème réseau, ou VM pas encore démarrée               | Vérifier `br-ex` (Partie 0), attendre la fin du démarrage (console), puis réessayer |
+| Erreur                                            | Signification                                            | Action                                                                              |     |
+| ------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------- | --- |
+| Refus immédiat (*Failed to connect … after 0 ms*) | La VM répond, mais aucun service n'écoute sur le port 80 | Relancer le serveur : `relaunch_web` puis `web`                                     |     |
+| Délai dépassé (*timed out*) ou ping sans réponse  | Problème réseau, ou VM pas encore démarrée               | Vérifier `br-ex` (Partie 0), attendre la fin du démarrage (console), puis réessayer |     |
 
 ## Partie 4 — Cycle de vie d'une instance
 
 Pour chaque opération ci-dessous, relevez le **statut** Nova, le `vm_state`, le `power_state`, et l'état vu par l'hyperviseur.
 
-Toutes les commandes sont exécutées sur l'instance EC2, avec les identifiants `admin`, dans le **même terminal qu'en Partie 3** (la variable `FIP` et les fonctions `web` et `relance_web` y sont déjà définies).
+Toutes les commandes sont exécutées sur l'instance EC2, avec les identifiants `admin`, dans le **même terminal qu'en Partie 3** (la variable `FIP` et les fonctions `web` et `relaunch_web` y sont déjà définies).
 
-Pour simplifier les observations, définissez une petite fonction `etat` dans votre terminal :
+Pour simplifier les observations, définissez une petite fonction `state dans votre terminal :
 
 ```bash
-etat() {
+state() {
   openstack server show vm-web -f shell \
     -c status -c flavor -c OS-EXT-STS:vm_state -c OS-EXT-STS:power_state -c OS-EXT-STS:task_state
   sudo virsh list --all
 }
-etat
 ```
 
-> **Important :** les commandes de cycle de vie sont **asynchrones**. Elles rendent la main immédiatement, alors que l'opération se poursuit en arrière-plan (`task_state` différent de `None`). Lancez donc **une seule opération à la fois**, relancez `etat` jusqu'à ce que le `task_state` revienne à `None`, relevez les valeurs, **puis** passez à l'opération suivante. Enchaîner deux commandes (par exemple `stop` puis `start` sur la même ligne) provoque une erreur `409 Conflict`, car l'instance est encore en cours de transition.
+ > **Important :** les commandes de cycle de vie rendent la main avant la fin de l'opération. Attendez que `state` affiche `task_state = None` avant de lancer la commande suivante, sinon vous obtiendrez une erreur `409 Conflict`.
 
-> **Nouveau terminal ?** Les fonctions et la variable `FIP` n'existent que dans le terminal où elles ont été définies. Dans un nouveau terminal, redéfinissez `web`, `relance_web` et `etat`, et récupérez l'adresse flottante :
->
-> ```bash
-> FIP=$(openstack floating ip list --port $(openstack port list --server vm-web -f value -c ID) -f value -c "Floating IP Address")
-> ```
+> **Nouveau terminal ?** Les fonctions (`web`, `relaunch_web`, `state`) et la variable `FIP` n'existent que dans le terminal où elles ont été définies. Redéfinissez-les avant de continuer :
+> 
 
-Après chaque opération **inverse** (`start`, `unpause`, `resume`, `unshelve`, `reboot`), testez le serveur web avec `web`. S'il ne répond pas, notez-le pour la Q9, puis relancez-le avec `relance_web` avant de passer à l'opération suivante.
+Après chaque opération **inverse** (`start`, `unpause`, `resume`, `unshelve`, `reboot`), testez le serveur web avec `web`. S'il ne répond pas, notez-le pour la Q9, puis relancez-le avec `relaunch_web` avant de passer à l'opération suivante.
 
 #### a) Arrêt et redémarrage
 
 ```bash
 openstack server stop vm-web
-etat                                  # attendre : SHUTOFF, task_state None
+state                                 # attendre : SHUTOFF, task_state None
 openstack server start vm-web
-etat                                  # attendre : ACTIVE
+state                                 # attendre : ACTIVE
 web
 ```
 
@@ -387,9 +391,9 @@ web
 
 ```bash
 openstack server pause vm-web
-etat
+state
 openstack server unpause vm-web
-etat
+state
 web
 ```
 
@@ -397,9 +401,9 @@ web
 
 ```bash
 openstack server suspend vm-web
-etat
+state
 openstack server resume vm-web
-etat
+state
 web
 ```
 
@@ -411,10 +415,10 @@ C'est l'opération adaptée à une instance qu'on n'utilisera pas pendant longte
 
 ```bash
 openstack server shelve vm-web
-etat                                  # attendre : SHELVED_OFFLOADED
+state                                 # attendre : SHELVED_OFFLOADED
 openstack image list                  # une nouvelle image est apparue
 openstack server unshelve vm-web
-etat                                  # attendre : ACTIVE
+state                                 # attendre : ACTIVE
 openstack image list
 web
 ```
@@ -423,9 +427,9 @@ web
 
 ```bash
 openstack server reboot --soft vm-web
-etat
+state
 openstack server reboot --hard vm-web
-etat
+state
 web
 ```
 
@@ -448,18 +452,18 @@ Redimensionnez l'instance vers le gabarit `lab03.medium`, puis **annulez** l'op�
 
 ```bash
 openstack server resize --flavor lab03.medium vm-web
-etat                                  # attendre : VERIFY_RESIZE, task_state None
+state                                  # attendre : VERIFY_RESIZE, task_state None
 openstack server resize revert vm-web
-etat                                  # attendre : ACTIVE — quel est le gabarit ?
+state                                 # attendre : ACTIVE — quel est le gabarit ?
 ```
 
 Recommencez, puis **confirmez** cette fois :
 
 ```bash
 openstack server resize --flavor lab03.medium vm-web
-etat                                  # attendre : VERIFY_RESIZE, task_state None
+state                                 # attendre : VERIFY_RESIZE, task_state None
 openstack server resize confirm vm-web
-etat                                  # ACTIVE avec lab03.medium
+state                                 # ACTIVE avec lab03.medium
 ```
 
 Essayez enfin de redimensionner vers un gabarit dont le disque est **plus petit** :
@@ -485,7 +489,7 @@ openstack server event show vm-web <request-id>      # choisissez le request-id 
 Avant de passer à la Partie 5, assurez-vous que le serveur web répond :
 
 ```bash
-relance_web
+relaunch_web
 web
 ```
 
@@ -496,13 +500,13 @@ web
 Connectez-vous à la VM et ajoutez une ligne à la page d'accueil :
 
 ```bash
-ssh -i ~/cle-lab03.pem ubuntu@$FIP
+ssh -i ~/key-lab03.pem ubuntu@$FIP
 ```
 
 Dans la VM :
 
 ```bash
-echo "<p>Modifie apres le demarrage</p>" | sudo tee -a /var/www/index.html
+echo "<p> Changed after boot </p>" | sudo tee -a /var/www/index.html
 exit
 ```
 
@@ -522,7 +526,7 @@ openstack server create vm-web-clone \
     --flavor lab03.medium \
     --network net-lab03 \
     --security-group sg-lab03 \
-    --key-name cle-lab03 \
+    --key-name key-lab03 \
     --wait
 
 FIP_CLONE=$(openstack floating ip create public -f value -c floating_ip_address)
@@ -535,7 +539,7 @@ Attendez la fin du démarrage (`openstack console log show vm-web-clone | tail -
 ```bash
 ping -c 3 $FIP_CLONE
 curl -sS -m 5 http://$FIP_CLONE
-ssh -i ~/cle-lab03.pem ubuntu@$FIP_CLONE "cat /var/www/index.html"
+ssh -i ~/key-lab03.pem ubuntu@$FIP_CLONE "cat /var/www/index.html"
 ```
 
 > **Q15.** Le clone contient-il la modification faite à la main ? Le serveur web est-il démarré automatiquement ? Expliquez.
@@ -595,52 +599,58 @@ Comparez les champs `backing file`, `virtual size` et `disk size` des deux insta
 
 > **Q16.** Retrouvez dans le XML libvirt le nombre de vCPU et la quantité de mémoire. Correspondent-ils au gabarit actuel de l'instance ?
 
-
 ## Nettoyage
 
-Supprimez les ressources propres à ce lab, mais **conservez celles qui serviront au Lab 04**.
+- Supprimez toutes les ressources créées pendant ce lab. 
 
-### a) Supprimer le clone, son IP flottante et le snapshot
+> L'ordre compte : une ressource ne peut être supprimée tant qu'une autre en dépend (un réseau relié à un routeur, un groupe de sécurité utilisé par une instance…). De plus, supprimer un projet **ne supprime pas** ses ressources : elles resteraient orphelines.
+
+### a) Ressources du projet (terminal `student-lab03`)
 
 ```bash
-openstack server delete vm-web-clone --wait
-openstack floating ip delete $FIP_CLONE
+# Instances et snapshot
+openstack server delete vm-web vm-web-clone --wait
 openstack image delete snap-vm-web
+
+# IP flottantes (supprimer une instance ne les libère pas)
+openstack floating ip delete $(openstack floating ip list -f value -c ID)
+
+# Routeur, puis réseau (le sous-réseau est supprimé avec le réseau)
+openstack router remove subnet router-lab03 subnet-lab03
+openstack router unset --external-gateway router-lab03
+openstack router delete router-lab03
+openstack network delete net-lab03
+
+# Groupe de sécurité et paire de clés
+openstack security group delete sg-lab03
+openstack keypair delete key-lab03
+rm -f ~/key-lab03.pem
 ```
 
-> Supprimer une instance **ne libère pas** son IP flottante : elle reste réservée dans le projet tant qu'elle n'est pas supprimée explicitement.
-
-### b) Mettre `vm-web` de côté
-
-L'instance `vm-web` sera réutilisée au Lab 04 (attachement d'un volume Cinder). Mettez-la en réserve pour libérer les ressources de l'hôte entre les deux séances :
+### b) Ressources d'administration (terminal `admin`)
 
 ```bash
-openstack server shelve vm-web
+openstack image delete ubuntu-24.04-minimal
+openstack flavor delete lab03.small lab03.medium lab03.private
+
+# Groupe de sécurité "default" créé automatiquement dans le projet
+openstack security group delete $(openstack security group list --project project-lab03 -f value -c ID)
+
+openstack user delete student-lab03
+openstack project delete project-lab03
 ```
 
-### c) Vérifier qu'il ne reste pas de ressources orphelines
+### c) Vérification (terminal `admin`)
 
 ```bash
-openstack server list
+openstack server list --all-projects
+openstack floating ip list
+openstack router list
+openstack network list
 openstack image list
-openstack floating ip list          # aucune IP avec un champ Port à "None"
+openstack flavor list
 ```
 
-Si une IP flottante n'est associée à aucun port, supprimez-la :
+Seules les ressources d'origine de DevStack doivent apparaître (réseaux `public`, `private`, `shared`, image `cirros`, gabarits `m1.*`…).
 
-```bash
-openstack floating ip delete <adresse>
-```
-
-### d) Ressources conservées pour le Lab 04
-
-| Ressource | Nom |
-|---|---|
-| Instance (en réserve) | `vm-web` et son IP flottante |
-| Image | `ubuntu-24.04-minimal` |
-| Gabarits | `lab03.small`, `lab03.medium`, `lab03.private` |
-| Réseau | `net-lab03`, `subnet-lab03`, `router-lab03` |
-| Groupe de sécurité | `sg-lab03` |
-| Paire de clés | `cle-lab03` (et le fichier `~/cle-lab03.pem`) |
-| Projet et utilisateur | `project-lab03`, `student-lab03` |
-
+> Le fichier `ubuntu-24.04-minimal-cloudimg-amd64.img` peut être conservé : il évitera un nouveau téléchargement en cas de besoin.
