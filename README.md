@@ -2,9 +2,9 @@
 
 # Cloud-Native Infrastructures
 
-Hands-on labs for the **Cloud-Native Infrastructures** module — Tek-Up University.
 
-This repository contains the lab instructions and their companion scripts. The labs are built on **OpenStack**, an open-source IaaS cloud platform, deployed with DevStack on an AWS EC2 instance. They cover OpenStack's core services (identity, compute, images, networking, storage), then automated infrastructure provisioning (Infrastructure as Code).
+This repository contains the lab instructions and companion scripts for the **Cloud-Native Infrastructures** course. Starting from a private IaaS cloud built with **OpenStack** (deployed with DevStack on an AWS EC2 instance), the
+labs progress through the four layers of a cloud-native platform: infrastructure, automation, orchestration and observability.
 
 ---
 
